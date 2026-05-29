@@ -88,7 +88,7 @@ to:
 | R2 | Plaintext credentials are not exposed through OpenSandbox-managed sandbox env vars, files, lifecycle API responses, diagnostics, or logs | Must Have |
 | R3 | Credential Proxy injects credentials only for matching scheme, port, FQDN, HTTP method, and path scope | Must Have |
 | R4 | Initial injection supports HTTP request headers | Must Have |
-| R5 | Kubernetes Secret, server-local configuration, and inline ephemeral values can be used as credential sources | Must Have |
+| R5 | Inline ephemeral values can be used as the public credential input | Must Have |
 | R6 | Credential-enabled sandboxes require explicit `networkPolicy.egress` coverage for every binding target | Must Have |
 | R7 | Audit logs and metrics identify binding usage without logging credential values | Must Have |
 | R8 | Docker and Kubernetes runtimes use the same user-facing API semantics | Must Have |
@@ -159,16 +159,18 @@ At a high level:
 | Sandbox bypasses Credential Proxy | Credential not injected, or traffic reaches destination without policy mediation | Use egress transparent redirect for TCP 80/443 and recommend `networkPolicy.defaultAction=deny` with `dns+nft` |
 | Credential leakage through logs | Secret exposure | Central redaction helpers; never log injected headers or rendered values; regression tests for logs |
 | Upstream echoes injected credential | Credential appears in sandbox-visible response content | Redact known credential values from response headers and text bodies where practical; document that services which echo sensitive request headers are unsupported unless response redaction is sufficient |
-| Inline ephemeral value leaked by lifecycle logging | Secret exposure | Treat `inlineEphemeral.value` as write-only input; redact request bodies, validation errors, SDK debug logs, and persisted sandbox metadata |
+| Inline credential value leaked by lifecycle logging | Secret exposure | Treat inline credential `value` as write-only input; redact request bodies, validation errors, SDK debug logs, and persisted sandbox metadata |
 | Credential source over-permissioned to sidecars | Cluster-wide secret access risk | Server resolves sources and passes only sandbox-scoped material; sidecar has no Kubernetes API permission by default |
-| Arbitrary Kubernetes Secret binding | Sandbox creator can use server RBAC to access unrelated cluster Secrets | Require configured source providers, namespace scope, allowlists, and requester authorization before resolving any Kubernetes Secret |
 | Binding and egress policy drift | Credential may be configured for unreachable or unintended destinations | Require `networkPolicy.egress` and fail creation when any binding target is not covered |
 | Header injection into wrong host due to redirects | Credential sent to unintended destination | Re-evaluate policy after each redirected request; strip injected credentials on cross-host redirect unless target scope matches |
 | Credential injected over cleartext HTTP | Credential exposed on the network | Default binding scope to `schemes: [https]` and `ports: [443]`; require explicit opt-in for any HTTP injection |
 | HTTPS CA not trusted by sandbox image | Authenticated HTTPS requests fail | Install/export the OpenSandbox mitmproxy CA during sandbox startup or document image requirements |
 | Transparent redirect unavailable | Credential traffic bypasses proxy policy | Fail sandbox creation/readiness when credential bindings are present and mitmproxy, iptables redirect, CA bootstrap, or egress auth cannot be configured |
-| User mitm addon observes injected headers | Credential exposure through extension hook | Disable user-provided mitm addons for credential-enabled sandboxes unless a future isolation model prevents addon access to credential-bearing flows |
+| Untrusted mitm addon observes injected headers | Future credential exposure if sandbox users can control addon loading | Current egress mitm addons are operator/platform-controlled and are not a sandbox-user API. Preserve that boundary: reject any future sandbox-supplied mitm addons for credential-enabled sandboxes, and allow only operator-configured trusted addons. |
 | Egress policy API unauthenticated | Sandbox process rewrites sidecar policy | Always provision `OPENSANDBOX_EGRESS_TOKEN` for credential-enabled sidecars, even when network policy would otherwise be omitted |
+| IPv6 bypasses transparent MITM | HTTP(S) traffic avoids inspection, injection, and audit | Short term: fail closed unless IPv6 is disabled or equivalently redirected; long term: support IPv6 through ip6tables/nftables redirect and test coverage |
+| Upstream TLS verification disabled | Credential injected into a spoofed upstream peer | Reject `OPENSANDBOX_EGRESS_MITMPROXY_SSL_INSECURE=true` for credential-enabled sandboxes |
+| Platform credential authorized for wrong destination | An operator-managed credential is injected into an attacker-controlled target | Do not expose platform credential sources as user-selectable source refs. Operator templates that use platform credentials must constrain allowed targets, methods, paths, schemes, ports, and injection renderings. |
 | Multiple bindings match one request | Wrong credential injection | Fail closed unless a single highest-priority binding is configured |
 | Long-lived credentials remain in proxy memory | Expanded exposure window | Cache with TTL, zero buffers where practical, prefer short-lived tokens from providers |
 | Users expect full secret management | Product confusion | Document Credential Vault as a broker layer, not a standalone secret manager |
@@ -181,7 +183,7 @@ At a high level:
 - **Credential Proxy**: Credential-aware runtime behavior in the egress sidecar's transparent mitmproxy path. It evaluates outbound HTTP/HTTPS requests and injects credentials when policy matches.
 - **Credential Binding**: A per-sandbox declaration that connects a credential source to an allowed destination and injection rule.
 - **Credential Binding Template**: A built-in or operator-configured template that expands user parameters and a credential source into a full credential binding.
-- **Credential Source**: A trusted source of credential material, such as Kubernetes Secret or server-local configuration.
+- **Credential Source**: Credential material supplied to Credential Proxy. In the MVP public API this is an inline ephemeral value accepted only at sandbox creation time. Operator-managed credentials may exist behind operator-configured templates, but are not user-selectable source refs.
 - **Credential Injection**: The act of adding credential material to an outbound request, for example as an `Authorization` header.
 
 ### Architecture Overview
@@ -191,13 +193,13 @@ Credential Vault should be modeled as a control-plane extension of sandbox lifec
 - Egress sidecar controls which network destinations are reachable.
 - Credential Proxy controls which credentials are attached to allowed outbound HTTP/HTTPS requests.
 
-For Kubernetes, this means the existing egress sidecar in the sandbox Pod starts mitmproxy transparent mode and loads OpenSandbox's credential addon. For Docker, this means the existing egress sidecar shares the sandbox network namespace, redirects outbound `80/443` traffic to mitmproxy, and runs the same credential addon.
+For Kubernetes, this means the existing egress sidecar in the sandbox Pod starts mitmproxy transparent mode and loads OpenSandbox's credential addon. For Docker, this means the existing egress sidecar shares the sandbox network namespace, redirects outbound configured HTTP/HTTPS ports to mitmproxy, and runs the same credential addon. The MVP built-in intercept ports are `80` and `443`.
 
 The egress sidecar already has the transparent MITM primitives required for Credential Proxy:
 
 - starts `mitmdump --mode transparent`,
-- redirects outbound `TCP 80/443` traffic to the mitmproxy listener using `iptables`,
-- loads system and user mitm addons,
+- redirects outbound configured HTTP/HTTPS destination ports, initially `TCP 80/443`, to the mitmproxy listener using `iptables`,
+- loads system and operator-configured mitm addons,
 - exports the mitmproxy root CA,
 - exposes health readiness so sandboxes do not start before interception is ready.
 
@@ -284,21 +286,12 @@ components:
 
     CredentialSourceRef:
       type: object
-      required: [type]
+      required: [value]
       properties:
-        type:
-          type: string
-          enum: [kubernetesSecret, serverLocal, inlineEphemeral]
-        name:
-          type: string
-          description: Provider-local credential source name. Required for kubernetesSecret and serverLocal; omitted for inlineEphemeral.
-        key:
-          type: string
-          description: Provider-local key name for multi-key sources.
         value:
           type: string
           writeOnly: true
-          description: Inline ephemeral credential value accepted only at sandbox creation time. Never returned, logged, or persisted as plaintext.
+          description: Inline ephemeral credential value accepted only at sandbox creation time. This is the default and only public MVP credential input. Never returned, logged, or persisted as plaintext.
       additionalProperties: false
 
     CredentialScope:
@@ -357,7 +350,7 @@ Validation rules:
   - **Inline full binding**: `sourceRef`, `scope`, and `injection`.
   - **Template binding**: `templateRef` and `credential`.
 - `templateRef.params` is for non-sensitive values only and may be logged in validation errors.
-- `credential` has the same schema as `sourceRef` and is treated as sensitive according to its source type.
+- `sourceRef` and `credential` both carry inline ephemeral credential material. Since inline ephemeral is the only public MVP credential input, no `type` discriminator is required.
 - Sandbox creators cannot define arbitrary templates in `CreateSandboxRequest`; they can only reference built-in or operator-configured templates.
 - The server expands templates before egress validation, ambiguity checks, and runtime bootstrap.
 
@@ -378,9 +371,7 @@ Example full binding request:
       {
         "name": "github-readonly",
         "sourceRef": {
-          "type": "kubernetesSecret",
-          "name": "github-readonly-token",
-          "key": "token"
+          "value": "ghp_xxx"
         },
         "scope": {
           "schemes": ["https"],
@@ -424,8 +415,7 @@ Example template binding request:
           }
         },
         "credential": {
-          "type": "inlineEphemeral",
-          "value": "domain-account:private-token"
+          "value": "ZG9tYWluLWFjY291bnQ6cHJpdmF0ZS10b2tlbg=="
         }
       }
     ]
@@ -447,7 +437,7 @@ The template expands this into an internal binding equivalent to:
   "injection": {
     "type": "header",
     "name": "Authorization",
-    "value": "Basic {{ credential | base64 }}"
+    "value": "Basic {{ credential }}"
   }
 }
 ```
@@ -476,14 +466,14 @@ Built-in template catalog:
 
 | Template | Required params | Optional params | Credential input | Injection |
 |----------|-----------------|-----------------|------------------|-----------|
-| `git-https-basic` | `target`, `repoPath` | none | `username:token` | `Authorization: Basic {{ credential | base64 }}` |
-| `generic-bearer` | `target` | `pathPrefix`, `methods` | bearer token | `Authorization: Bearer {{ credential }}` |
-| `generic-basic` | `target` | `pathPrefix`, `methods` | `username:password` | `Authorization: Basic {{ credential | base64 }}` |
+| `git-https-basic` | `target`, `repoPath` | none | pre-encoded `base64(username:token)` | `Authorization: Basic {{ credential }}` |
+| `generic-bearer` | `target` | `pathPrefix` | bearer token | `Authorization: Bearer {{ credential }}` |
+| `generic-basic` | `target` | `pathPrefix` | pre-encoded `base64(username:password)` | `Authorization: Basic {{ credential }}` |
 | `openai-bearer` | `target` | `pathPrefix` | API key | `Authorization: Bearer {{ credential }}` |
 | `github-token` | `target` | `pathPrefix` | GitHub token | `Authorization: Bearer {{ credential }}` |
 | `gitlab-token` | `target` | `pathPrefix`, `mode` | GitLab token | `PRIVATE-TOKEN: {{ credential }}` by default, or `Authorization: Bearer {{ credential }}` when `mode=bearer` |
 | `npm-token` | `target` | `pathPrefix` | npm token | `Authorization: Bearer {{ credential }}` |
-| `pypi-token` | `target` | `pathPrefix` | PyPI API token | `Authorization: Basic {{ '__token__:' + credential | base64 }}` |
+| `pypi-token` | `target` | `pathPrefix` | pre-encoded `base64(__token__:token)` | `Authorization: Basic {{ credential }}` |
 
 All built-in templates default to:
 
@@ -497,7 +487,7 @@ Built-in template expansion examples:
 ```yaml
 git-https-basic:
   requiredParams: [target, repoPath]
-  credentialInput: username:token
+  credentialInput: base64(username:token)
   scope:
     schemes: [https]
     ports: [443]
@@ -507,17 +497,17 @@ git-https-basic:
   injection:
     type: header
     name: Authorization
-    value: "Basic {{ credential | base64 }}"
+    value: "Basic {{ credential }}"
 
 generic-bearer:
   requiredParams: [target]
-  optionalParams: [pathPrefix, methods]
+  optionalParams: [pathPrefix]
   credentialInput: token
   scope:
     schemes: [https]
     ports: [443]
     targets: ["{{ target }}"]
-    methods: "{{ methods | default([GET, POST, PUT, PATCH, DELETE]) }}"
+    methods: [GET, POST, PUT, PATCH, DELETE]
     paths: ["{{ pathPrefix | default('/*') }}"]
   injection:
     type: header
@@ -530,7 +520,9 @@ Provider-specific notes:
 - `openai-bearer` is equivalent to `generic-bearer` with OpenAI-compatible API defaults. Operators should pin `target` for managed deployments.
 - `github-token` uses `Authorization: Bearer` by default for modern GitHub API usage.
 - `gitlab-token` defaults to GitLab's `PRIVATE-TOKEN` header for API usage; `mode=bearer` is available for deployments that use OAuth/JWT bearer tokens.
-- `pypi-token` is intended for PyPI-compatible APIs that accept Basic auth with `__token__` as the username. Package manager behavior varies, so operators may prefer an operator-configured template for private indexes.
+- `pypi-token` is intended for PyPI-compatible APIs that accept Basic auth with `__token__` as the username. For the MVP, callers or upper-layer platforms pass the already encoded `base64(__token__:token)` value. Package manager behavior varies, so operators may prefer an operator-configured template for private indexes.
+- Built-in templates intentionally do not accept typed template params in the MVP. Method lists and other typed behavior are fixed by template type or by operator-configured templates.
+- The MVP renderer supports only `{{ credential }}`. Built-in templates that need Basic auth require callers or upper-layer platforms to pre-encode the credential value before sandbox creation. Future versions may add server-side encoding helpers after the renderer model is explicitly designed.
 
 Example server configuration:
 
@@ -557,8 +549,7 @@ Example use:
     }
   },
   "credential": {
-    "type": "inlineEphemeral",
-    "value": "domain-account:private-token"
+    "value": "ZG9tYWluLWFjY291bnQ6cHJpdmF0ZS10b2tlbg=="
   }
 }
 ```
@@ -568,55 +559,36 @@ Template safety rules:
 - Templates must be built-in or configured by an operator; sandbox creators cannot submit arbitrary template definitions.
 - Template params must be schema-validated by the selected template.
 - Sensitive values must not be passed through `templateRef.params`; use `credential` so redaction and write-only handling apply.
-- Expanded bindings must still pass HTTPS/port defaults, egress policy validation, source authorization, and ambiguity checks.
+- Expanded bindings must still pass HTTPS/port defaults, egress policy validation, operator credential constraints, and ambiguity checks.
 - Templates should keep targets and paths as narrow as possible. Operator-configured templates may fix `target` and allow only path parameters, which is safer for enterprise deployments.
+- Operator-configured templates may internally use platform-managed credentials, but those credentials are selected by the operator template configuration, not by sandbox user input.
 
 ### Credential Sources
 
-The MVP supports three source types.
+The MVP exposes one public credential input: an inline ephemeral value.
 
-1. **Kubernetes Secret**
-   - Available only for Kubernetes runtime.
-   - The OpenSandbox server reads the referenced secret through a configured source provider, not arbitrary namespace/name input from the sandbox creator.
-   - The source provider must define allowed namespaces, allowed secret names or label selectors, and requester authorization rules.
-   - Sandbox creation must fail if the requester is not authorized to bind the referenced Kubernetes Secret.
-   - Credential Proxy does not receive Kubernetes API permissions by default.
-   - The resolved value is passed to the proxy through a sandbox-scoped secret volume or bootstrap channel.
-
-2. **Server-local source**
-   - Available for Docker and local development.
-   - Configured in server TOML, for example:
-
-```toml
-[credential_vault]
-enabled = true
-
-[[credential_vault.sources]]
-type = "server_local"
-name = "github-readonly-token"
-value_env = "OPENSANDBOX_GITHUB_READONLY_TOKEN"
-```
-
-3. **Inline ephemeral source**
-   - Available for cases where an upper-layer platform creates a sandbox-scoped credential at sandbox creation time.
-   - The inline value is accepted only in `CreateSandboxRequest`.
-   - The OpenSandbox server must treat the value as write-only: do not return it in lifecycle responses, do not persist it as plaintext, and redact it from logs and validation errors.
-   - The server converts the value into sandbox-scoped runtime credential material for the egress sidecar / Credential Proxy.
-   - For Kubernetes, the runtime material may be represented as a generated Secret that is mounted only into the egress sidecar, not the application container.
-   - Generated runtime Secrets must be labeled with the sandbox identity and cleaned up when the sandbox is deleted. Use `ownerReferences` where possible and finalizers only when external revocation or cross-namespace cleanup is required.
+- Available for cases where a caller or upper-layer platform creates a sandbox-scoped credential at sandbox creation time.
+- The inline value is accepted only in `CreateSandboxRequest`.
+- Because inline ephemeral is the only public MVP credential input, callers do not declare a `type`.
+- The OpenSandbox server must treat the value as write-only: do not return it in lifecycle responses, do not persist it as plaintext, and redact it from logs and validation errors.
+- The server converts the value into sandbox-scoped runtime credential material for the egress sidecar / Credential Proxy.
+- For Kubernetes, the runtime material may be represented as a generated Secret that is mounted only into the egress sidecar, not the application container.
+- Generated runtime Secrets must be labeled with the sandbox identity and cleaned up when the sandbox is deleted. Use `ownerReferences` where possible and finalizers only when external revocation or cross-namespace cleanup is required.
+- Platform-level credentials are not exposed through user-selectable `sourceRef` names in the MVP. Platforms that need create-once, reference-many credentials should wrap them behind operator-configured binding templates and enforce template usage authorization at the platform layer.
 
 Example:
 
 ```json
 {
   "sourceRef": {
-    "type": "inlineEphemeral",
     "value": "ghp_xxx"
   }
 }
 ```
 
-Future providers may include HashiCorp Vault, Infisical, AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and internal credential brokers.
+Kubernetes Secret is not a user-facing credential source in the MVP. In Kubernetes runtime, it may be used only as a sandbox-scoped runtime delivery mechanism generated by OpenSandbox, mounted only into the egress sidecar, and owned/cleaned up with the sandbox. Sandbox creators cannot reference arbitrary pre-existing Kubernetes Secret names.
+
+Future providers may include HashiCorp Vault, Infisical, AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, internal credential brokers, and a Kubernetes Secret provider. Adding any user-selectable source provider requires a separate authorization model, namespace/scope policy, allowlists/selectors, requester authorization, and source-to-destination constraints.
 
 ### Credential Injection
 
@@ -632,9 +604,11 @@ injection:
 Rules:
 
 - `{{ credential }}` is the only supported template variable in the MVP.
+- The MVP renderer does not support filters, functions, string concatenation, arbitrary expressions, or user-defined transforms.
 - Credential Proxy must reject templates that do not include `{{ credential }}`.
 - Credential Proxy must inject only for HTTPS on port 443 by default.
-- Any HTTP or non-443 injection requires explicit `scope.schemes` and `scope.ports` opt-in and should be rejected by default platform policy unless the operator enables it.
+- Transparent mode supports credential injection only for destination ports that the egress sidecar redirects into mitmproxy. The MVP supports `443` by default and `80` when an operator-configured template or explicit operator policy enables cleartext HTTP injection.
+- Any binding scope that uses ports outside `80/443` must be rejected unless the operator explicitly configures those ports as transparent MITM intercept ports and the runtime can install matching redirect rules.
 - Credential Proxy must reject attempts to inject hop-by-hop proxy headers unless explicitly allowed by implementation.
 - Credential Proxy must remove any existing request header with the same name before injecting a credential, unless a future merge strategy is added.
 - On redirect, Credential Proxy must re-evaluate target scope before preserving injected headers.
@@ -642,6 +616,12 @@ Rules:
 ### Response Redaction and Echo Handling
 
 Credential Proxy should redact known credential values from upstream response headers and text-like response bodies where practical. This protects against common debug endpoints and error handlers that echo request headers.
+
+Redaction must include both source and rendered credential values, including:
+
+- raw `credential` source material,
+- rendered injected header values such as `Bearer <token>`,
+- rendered Basic header values such as `Basic <base64(username:token)>`.
 
 This redaction is best effort, not an absolute secrecy guarantee:
 
@@ -663,17 +643,19 @@ Advantages:
 
 - No application proxy or base URL changes.
 - Reuses existing egress sidecar network namespace, `iptables` redirect, health gate, and mitmproxy integration.
-- Works with existing HTTP clients, SDKs, CLIs, and agent-generated code as long as they use TCP `80/443` and trust the sandbox CA.
+- Works with existing HTTP clients, SDKs, CLIs, and agent-generated code as long as they use intercepted HTTP/HTTPS ports and trust the sandbox CA. The MVP supported ports are `80/443`.
 - Keeps credential policy enforcement at the egress boundary, where network policy is already enforced.
 
 Limitations:
 
 - Requires Linux network namespace support and `CAP_NET_ADMIN` for the egress sidecar.
 - Requires the sandbox to trust the mitmproxy CA for HTTPS interception.
-- Applies to HTTP/HTTPS traffic on `80/443`; non-HTTP protocols need future designs.
-- In `ignore_hosts` pass-through mode, Credential Proxy cannot inspect or inject credentials for those hosts.
+- Applies to HTTP/HTTPS traffic on configured transparent MITM intercept ports. The MVP supports `80/443`; additional ports require operator configuration and runtime redirect support. Non-HTTP protocols need future designs.
+- Credential-bound targets must not match `ignore_hosts`. Because `ignore_hosts` is pass-through TLS, Credential Proxy cannot inspect, inject, redact, or audit those flows.
+- Short term: credential-enabled startup must fail closed unless IPv6 HTTP(S) egress is disabled or covered by equivalent transparent redirect. Long term: IPv6 support should use ip6tables or nftables redirect with the same tests as IPv4.
+- Credential-enabled startup must reject upstream TLS-insecure mode such as `OPENSANDBOX_EGRESS_MITMPROXY_SSL_INSECURE=true`.
 - Credential-enabled startup must fail closed if mitmproxy, `iptables` redirect, CA bootstrap, credential addon loading, or egress API authentication cannot be configured.
-- User-provided mitm addons are disabled for credential-enabled sandboxes unless a future isolation model prevents them from observing credential-bearing flows.
+- MITM addon trust boundary: current egress mitm addons are configured by the operator/platform through egress sidecar configuration, not by sandbox users. This is not a credential leak by itself because operator-configured addons are part of the platform trust boundary. Credential-enabled sandboxes must preserve this boundary by rejecting any future sandbox-supplied addon mechanism and by ensuring addon script paths do not come from app-container-writable locations. Operator-configured trusted addons may be loaded and must follow the same credential redaction and audit rules.
 
 ### Policy and Egress Integration
 
@@ -682,6 +664,7 @@ Credential-enabled sandboxes must include `networkPolicy.egress`. The server mus
 Required validation:
 
 - Every credential binding target must be covered by an allow rule in `networkPolicy.egress`.
+- More formally, the set of credential binding targets must be a subset of the egress allow targets after template expansion and wildcard normalization.
 - `networkPolicy.defaultAction` should be `deny`; if `allow` is accepted for compatibility, the server must still require explicit allow coverage for every binding target and warn that broad outbound access coexists with credential-bearing traffic.
 - If `networkPolicy` is omitted, if `egress` is empty, or if a binding target is not reachable under egress policy, sandbox creation must fail with HTTP 400.
 
@@ -691,9 +674,12 @@ Suggested configuration:
 [credential_vault]
 enabled = true
 egress_validation = "strict"
+transparent_intercept_ports = [80, 443]
 ```
 
 For credential-enabled sandboxes, strict validation is required. Non-strict egress validation would allow credential-bearing traffic to run without an explicit network policy boundary.
+
+`transparent_intercept_ports` defines the destination ports that the egress sidecar must redirect into transparent mitmproxy for credential injection. The default MVP value is `[80, 443]`. Operators may add ports only when the runtime supports redirecting those ports and the deployment has test coverage for them. Sandbox creation must fail if any credential binding `scope.ports` value is not included in `transparent_intercept_ports`.
 
 Credential-enabled sidecars must always provision `OPENSANDBOX_EGRESS_TOKEN` for the egress policy API, including cases where the egress sidecar starts solely because credentials are enabled. The application container must not receive this token.
 
@@ -735,31 +721,33 @@ All diagnostics APIs that surface runtime logs must preserve redaction behavior.
 #### Server
 
 - Add config model for `[credential_vault]`.
-- Add source provider interface.
+- Add write-only inline credential material handling for sandbox creation.
 - Validate `CreateSandboxRequest.credentialVault`.
 - Load built-in and operator-configured binding templates.
 - Expand template bindings into full bindings before egress validation and runtime bootstrap.
 - Require and validate `networkPolicy.egress` for credential-enabled sandboxes.
 - Persist credential binding metadata without plaintext credential values.
 - Resolve or prepare sandbox-scoped credential material during sandbox creation.
-- Redact `inlineEphemeral.value` from request logging, validation errors, persisted metadata, and lifecycle responses.
+- Redact inline credential values from request logging, validation errors, persisted metadata, and lifecycle responses.
 - Enable egress transparent mitmproxy, egress API auth, and credential addon bootstrap for Docker and Kubernetes runtimes when bindings are present.
 
 #### Components / Egress
 
 - Extend `components/egress` transparent mitmproxy support with a first-party credential addon.
+- Keep transparent MITM redirect ports configurable. The default credential-enabled intercept set is `80/443`; additional ports require explicit operator configuration and matching redirect rules.
 - Load credential binding bootstrap config into the egress sidecar.
 - Implement binding evaluation, header injection, redaction, and audit events in the mitm addon path.
 - Keep the existing system addon behavior for streaming.
-- Disable user-provided mitm addon loading for credential-enabled sandboxes until addon isolation is designed.
-- Fail readiness/startup when transparent redirect, credential addon loading, CA bootstrap, or egress API auth is unavailable for a credential-enabled sandbox.
+- Reject sandbox-supplied mitm addon loading for credential-enabled sandboxes. Operator-configured trusted addons may run as part of the platform trust boundary.
+- Fail readiness/startup when transparent redirect, credential addon loading, CA bootstrap, upstream TLS verification, IPv6 coverage/disablement, or egress API auth is unavailable for a credential-enabled sandbox.
 
 #### Kubernetes
 
 - Enable the egress sidecar with transparent mitmproxy when credential bindings are present.
 - Add secret projection or bootstrap delivery for sandbox-scoped credential material.
-- For `inlineEphemeral`, optionally create a generated sandbox-scoped Kubernetes Secret mounted only into the egress sidecar.
+- For inline credentials, optionally create a generated sandbox-scoped Kubernetes Secret mounted only into the egress sidecar.
 - Generated runtime Secrets must use labels and `ownerReferences` when possible; finalizers are reserved for cleanup that Kubernetes garbage collection cannot cover.
+- Kubernetes Secrets are runtime delivery artifacts only in the MVP; they are not user-facing credential sources.
 - Ensure Credential Proxy has no broad Kubernetes API permissions by default.
 - Ensure the mitmproxy CA is trusted by the sandbox application container when HTTPS interception is enabled.
 - Ensure generated egress API auth material is available only to the control plane and egress sidecar, not the application container.
@@ -790,26 +778,29 @@ All diagnostics APIs that surface runtime logs must preserve redaction behavior.
 - Provider-specific built-ins such as `gitlab-token` and `pypi-token` validate supported modes and credential rendering.
 - Scheme, port, FQDN, wildcard, method, and path matching work as expected.
 - Injection defaults to HTTPS/443 only and rejects HTTP injection unless explicitly configured and permitted.
+- Binding scopes that use ports outside configured transparent MITM intercept ports are rejected.
 - Multiple matching bindings fail closed.
 - Existing headers with the injection name are replaced or rejected according to the selected implementation rule.
 - Redaction removes credential values from logs and errors.
 - Response redaction removes known credential values from response headers and supported text bodies.
-- `inlineEphemeral.value` is accepted only as write-only create input and never appears in serialized sandbox metadata or API responses.
+- Inline credential `value` is accepted only as write-only create input and never appears in serialized sandbox metadata or API responses.
 - Egress validation requires `networkPolicy.egress` and catches binding targets not allowed by policy.
-- Kubernetes Secret source providers reject namespace/name references that are outside configured allowlists or requester authorization.
 - Operator-configured templates reject repo paths outside allowed prefixes.
 
 ### Integration Tests
 
-- Docker sandbox with server-local source can call a mock HTTP/HTTPS server that requires an injected header without setting proxy or base URL configuration.
 - Docker sandbox with inline ephemeral source can call a mock HTTP/HTTPS server and cannot recover the inline credential from environment, filesystem, diagnostics, or lifecycle responses.
 - Docker sandbox cannot read credential value from environment variables, mounted files, lifecycle API response, or diagnostics.
-- Kubernetes sandbox with Kubernetes Secret source can call a mock HTTP/HTTPS server that requires an injected header without setting proxy or base URL configuration.
 - Kubernetes sandbox with inline ephemeral source creates sandbox-scoped runtime material mounted only into the egress sidecar and cleans it up on sandbox deletion.
+- Kubernetes runtime rejects requests that try to reference arbitrary pre-existing Kubernetes Secret names as credential sources.
 - Credential Proxy denies non-matching hosts, paths, and methods.
 - Credential-enabled sandbox creation/readiness fails when transparent redirect, mitm readiness, CA bootstrap, credential addon loading, or egress API auth cannot be configured.
+- Credential-enabled sandbox creation rejects a binding that targets a non-configured port, and accepts the same port only after the operator configures transparent MITM interception for that port.
 - Credential-enabled sidecars require egress API auth even when credentials are the only reason the egress sidecar starts.
-- User-provided mitm addons are not loaded for credential-enabled sandboxes.
+- Sandbox-supplied mitm addons are not loaded for credential-enabled sandboxes; operator-configured trusted addons may run.
+- Credential-enabled startup fails when IPv6 is enabled without equivalent transparent redirect coverage.
+- Credential-enabled startup rejects upstream TLS-insecure mode.
+- Credential-enabled startup rejects bindings that match `ignore_hosts`.
 - Cross-host redirect strips or re-evaluates injected credentials.
 - Sandbox deletion cleans up Credential Proxy and any sandbox-scoped credential material.
 
@@ -820,13 +811,14 @@ All diagnostics APIs that surface runtime logs must preserve redaction behavior.
 - Verify direct access to a non-allowed domain fails under egress policy.
 - Verify logs and diagnostic APIs never contain the credential string.
 - Verify a mock upstream that echoes request headers does not expose known credential values in supported response headers or text bodies.
+- Verify response redaction covers both raw and rendered injected credential values.
 
 ## Drawbacks
 
 - Requires enabling transparent MITM for credential-bearing HTTP/HTTPS traffic.
 - Adds a new control-plane surface and a credential-aware path inside egress.
 - Requires stricter startup behavior than ordinary egress policy; credential-enabled sandboxes fail closed instead of gracefully degrading when transparent interception is unavailable.
-- Disables user-provided mitm addons for credential-enabled sandboxes until addon isolation is available.
+- Keeps MITM addons inside the operator/platform trust boundary; sandbox-supplied addons remain unsupported for credential-enabled sandboxes.
 - Cannot provide an absolute secrecy guarantee against arbitrary upstream services that echo credentials in unsupported response encodings or protocols.
 - Users may confuse Credential Vault with a full secret management system.
 - Debugging outbound requests becomes more complex because credentials are injected outside the application process.
@@ -861,9 +853,8 @@ Allowing sandbox creators to define arbitrary templates inline would reduce serv
 ## Infrastructure Needed
 
 - No new Credential Proxy component image for the MVP; Credential Proxy is implemented in the existing egress image through transparent mitmproxy and a first-party credential addon.
-- Server configuration for credential source providers.
-- Kubernetes RBAC for server-side secret reads where Kubernetes Secret sources are enabled.
-- Kubernetes permission to create/delete sandbox-scoped runtime Secrets when `inlineEphemeral` is enabled for Kubernetes runtime.
+- Server configuration for binding templates and optional operator-managed credential backing stores used by those templates.
+- Kubernetes permission to create/delete sandbox-scoped runtime Secrets when inline credentials are enabled for Kubernetes runtime.
 - CI tests for Docker and Kubernetes runtime paths.
 - Documentation and examples for common credential binding patterns.
 - Documentation for built-in binding templates and operator-configured templates.
@@ -878,9 +869,9 @@ Credential Vault is opt-in. Existing sandboxes, SDK calls, egress policies, and 
 Recommended rollout:
 
 1. Add schema and server validation behind `[credential_vault].enabled = false` by default.
-2. Extend egress transparent mitmproxy with credential addon support and server-local source for local development.
-3. Implement Kubernetes Secret source and egress sidecar credential bootstrap.
+2. Extend egress transparent mitmproxy with credential addon support and inline credential bootstrap.
+3. Implement Kubernetes egress sidecar credential bootstrap using sandbox-scoped runtime material.
 4. Add SDK models and CLI examples.
 5. Document production guidance: use `networkPolicy.defaultAction=deny`, keep credential targets narrow, avoid broad methods and paths, and monitor audit events.
 
-No migration is required for existing users. Users currently injecting secrets through environment variables can gradually migrate by moving those values into configured credential sources and letting Credential Proxy inject them into normal outbound HTTP/HTTPS calls.
+No migration is required for existing users. Users currently injecting secrets through environment variables can gradually migrate by passing sandbox-scoped inline credentials at creation time, or by using platform-provided binding templates that hide operator-managed credentials behind platform authorization.
