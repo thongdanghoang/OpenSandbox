@@ -7,10 +7,10 @@ Run [Qwen Code](https://github.com/QwenLM/qwen-code) inside an OpenSandbox conta
 Pre-pull the code-interpreter image (includes Node.js):
 
 ```shell
-docker pull sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.0.2
+docker pull sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.1.0
 
 # use docker hub
-# docker pull opensandbox/code-interpreter:v1.0.2
+# docker pull opensandbox/code-interpreter:v1.1.0
 ```
 
 Then start the local OpenSandbox server, stdout logs will be visible in the terminal:
@@ -42,7 +42,7 @@ The script installs Qwen Code (`npm install -g @qwen-code/qwen-code@latest`) at 
 
 - `SANDBOX_DOMAIN`: Sandbox service address (default: `localhost:8080`)
 - `SANDBOX_API_KEY`: API key if your server requires authentication (optional for local)
-- `SANDBOX_IMAGE`: Sandbox image to use (default: `sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.0.2`)
+- `SANDBOX_IMAGE`: Sandbox image to use (default: `sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.1.0`)
 - `API_KEY`: API key for the OpenAI-compatible provider used by Qwen Code (required)
 - `BASE_URL`: OpenAI-compatible base URL (default: `https://dashscope.aliyuncs.com/compatible-mode/v1`)
 - `MODEL_NAME`: Model name for Qwen Code (default: `qwen3-coder-plus`)

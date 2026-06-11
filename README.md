@@ -194,7 +194,7 @@ from opensandbox.models import WriteEntry
 async def main() -> None:
     # 1. Create a sandbox
     sandbox = await Sandbox.create(
-        "opensandbox/code-interpreter:v1.0.2",
+        "opensandbox/code-interpreter:v1.1.0",
         entrypoint=["/opt/code-interpreter/code-interpreter.sh"],
         env={"PYTHON_VERSION": "3.11"},
         timeout=timedelta(minutes=10),
