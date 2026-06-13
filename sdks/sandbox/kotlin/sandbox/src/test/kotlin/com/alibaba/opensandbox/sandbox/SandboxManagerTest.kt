@@ -250,20 +250,38 @@ class SandboxManagerTest {
     }
 
     @Test
-    fun `waitForSnapshotReady polls until the deadline even when the interval exceeds the timeout`() {
-        // pollingInterval (1s) is larger than the timeout (200ms): the helper must still wait out
-        // the window and poll again instead of timing out after the first non-ready response.
-        val sequence = listOf(snapshot(SnapshotState.CREATING), snapshot(SnapshotState.READY))
+    fun `waitForSnapshotReady keeps polling within the window instead of giving up early`() {
+        // Several non-ready polls within a generous window must not trigger a premature timeout.
+        val sequence =
+            listOf(
+                snapshot(SnapshotState.CREATING),
+                snapshot(SnapshotState.CREATING),
+                snapshot(SnapshotState.READY),
+            )
         var index = 0
         every { sandboxService.getSnapshot("snapshot-id") } answers { sequence[index++] }
 
         val result =
             sandboxManager.waitForSnapshotReady(
                 "snapshot-id",
-                Duration.ofMillis(200),
                 Duration.ofSeconds(1),
+                Duration.ofMillis(20),
             )
 
         assertEquals(SnapshotState.READY, result.status.state)
+        verify(exactly = 3) { sandboxService.getSnapshot("snapshot-id") }
+    }
+
+    @Test
+    fun `waitForSnapshotReady does not accept a snapshot that turns ready only after the deadline`() {
+        // The interval (100ms) outlasts the timeout (80ms): after the single sleep the deadline has
+        // passed, so the late READY must be rejected with a timeout rather than returned as success.
+        val sequence = listOf(snapshot(SnapshotState.CREATING), snapshot(SnapshotState.READY))
+        var index = 0
+        every { sandboxService.getSnapshot("snapshot-id") } answers { sequence[index++] }
+
+        assertThrows(SandboxReadyTimeoutException::class.java) {
+            sandboxManager.waitForSnapshotReady("snapshot-id", Duration.ofMillis(80), Duration.ofMillis(100))
+        }
     }
 }

@@ -256,6 +256,13 @@ class SandboxManager internal constructor(
         val deadline = System.currentTimeMillis() + timeout.toMillis()
         var attempt = 0
         while (true) {
+            // Enforce the deadline before each poll so a snapshot that only turns Ready after the
+            // timeout is reported as a timeout rather than a late success.
+            if (System.currentTimeMillis() >= deadline) {
+                throw SandboxReadyTimeoutException(
+                    "Snapshot $snapshotId did not become ready within ${timeout.seconds}s ($attempt attempts)",
+                )
+            }
             attempt++
             val snapshot = getSnapshot(snapshotId)
             when (snapshot.status.state) {
@@ -276,15 +283,12 @@ class SandboxManager internal constructor(
                     )
             }
 
-            val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0) {
-                throw SandboxReadyTimeoutException(
-                    "Snapshot $snapshotId did not become ready within ${timeout.seconds}s ($attempt attempts)",
-                )
-            }
             // Sleep for at most the remaining window so we keep polling until the real deadline
-            // instead of giving up early when one interval would overshoot it.
-            Thread.sleep(minOf(pollingInterval.toMillis(), remaining))
+            // instead of giving up a full interval early, and never sleep past it.
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining > 0) {
+                Thread.sleep(minOf(pollingInterval.toMillis(), remaining))
+            }
         }
     }
 
