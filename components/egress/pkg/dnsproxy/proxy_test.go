@@ -22,6 +22,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 
+	"github.com/alibaba/opensandbox/egress/pkg/constants"
 	"github.com/alibaba/opensandbox/egress/pkg/nftables"
 	"github.com/alibaba/opensandbox/egress/pkg/policy"
 )
@@ -83,6 +84,10 @@ func TestExtractResolvedIPs_EmptyOrNil(t *testing.T) {
 }
 
 func TestForwardAddsEDNS0BufferSize(t *testing.T) {
+	t.Cleanup(func() { resetNameserverExemptCache(t) })
+	t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+	resetNameserverExemptCache(t)
+
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
