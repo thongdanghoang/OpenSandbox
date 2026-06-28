@@ -1,0 +1,560 @@
+<meta charset="utf-8">
+<title>OpenSandbox vs Dev Containers</title>
+<meta name="description" content="Cùng dùng container, giải hai bài toán khác nhau — so sánh qua lăng kính chạy AI agent.">
+<style>
+  :root {
+    --paper: #eef1ec;
+    --panel: #f9faf7;
+    --carbon: #14191a;
+    --ink: #181f1c;
+    --ink-2: #586259;
+    --line: #d5dbd1;
+    --line-strong: #c2cabd;
+
+    /* OpenSandbox — pine teal (hạ tầng, lạnh) */
+    --os: #0e7d72;
+    --os-deep: #0a5f57;
+    --os-soft: #d9eae5;
+    --os-tint: #e8f2ee;
+
+    /* Dev Containers — clay/amber (xưởng cá nhân, ấm) */
+    --ds: #a4661f;
+    --ds-deep: #7f4e15;
+    --ds-soft: #efe1c9;
+    --ds-tint: #f4ebda;
+
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+    --maxw: 1080px;
+    --prose: 700px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+
+  h2 {
+    font-size: clamp(1.45rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-weight: 750;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h3 { font-size: 1.08rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  .prose { max-width: var(--prose); }
+  .prose p + p { margin-top: 0.9em; }
+  strong { font-weight: 700; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: #e3e8e0;
+    padding: 0.1em 0.38em;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+
+  /* ---------- HERO ---------- */
+  .hero { padding: clamp(56px, 9vw, 104px) 0 clamp(40px, 6vw, 64px); }
+  .hero-mark {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .hero-mark .os { color: var(--os); }
+  .hero-mark .ds { color: var(--ds); }
+  .hero-mark .x { color: var(--ink-2); }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6.4vw, 4.4rem);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .hero h1 .a { color: var(--os); }
+  .hero h1 .b { color: var(--ds); }
+  .splitrule { height: 5px; width: 100%; margin: 30px 0 26px; display: flex; }
+  .splitrule i { display: block; height: 100%; }
+  .splitrule .l { flex: 1; background: var(--os); }
+  .splitrule .r { flex: 1; background: var(--ds); }
+  .hero .lede {
+    font-size: clamp(1.05rem, 1.9vw, 1.3rem);
+    color: var(--ink-2);
+    max-width: 760px;
+    line-height: 1.55;
+  }
+  .hero .lede b { color: var(--ink); font-weight: 650; }
+
+  /* ---------- section rhythm ---------- */
+  section { padding: clamp(40px, 6vw, 72px) 0; border-top: 1px solid var(--line); }
+  .sec-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 34px; max-width: var(--prose); }
+
+  /* ---------- TL;DR ---------- */
+  .verdict {
+    background: var(--carbon);
+    color: #eef1ec;
+    border-radius: 14px;
+    padding: clamp(28px, 4vw, 44px);
+    display: grid;
+    gap: 22px;
+  }
+  .verdict .tag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #8fa39a;
+  }
+  .verdict .big {
+    font-size: clamp(1.5rem, 3.4vw, 2.3rem);
+    line-height: 1.15; font-weight: 750; letter-spacing: -0.02em;
+    text-wrap: balance; margin: 0;
+  }
+  .verdict .big .tealw { color: #46c7b8; }
+  .verdict .big .clayw { color: #e0a458; }
+  .verdict .split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #2a312e; border-radius: 10px; overflow: hidden; }
+  .verdict .split2 > div { background: #1b211f; padding: 20px 22px; }
+  .verdict .split2 .lbl { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+  .verdict .split2 .os .lbl { color: #46c7b8; }
+  .verdict .split2 .ds .lbl { color: #e0a458; }
+  .verdict .split2 p { color: #c4ccc6; font-size: 0.96rem; line-height: 1.5; }
+
+  /* ---------- definitions ---------- */
+  .def-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .def-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 26px 26px 28px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .def-card.is-os { --accent: var(--os); }
+  .def-card.is-ds { --accent: var(--ds); }
+  .def-card .kicker {
+    font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); font-weight: 650;
+  }
+  .def-card h3 { font-size: 1.3rem; }
+  .def-card .one-liner { color: var(--ink); font-weight: 600; font-size: 1.02rem; }
+  .def-card p { color: var(--ink-2); font-size: 0.97rem; line-height: 1.55; }
+  .def-card ul { margin: 4px 0 0; padding-left: 0; list-style: none; display: grid; gap: 8px; }
+  .def-card li { position: relative; padding-left: 22px; color: var(--ink-2); font-size: 0.93rem; line-height: 1.45; }
+  .def-card li::before {
+    content: "→"; position: absolute; left: 0; top: 0;
+    font-family: var(--font-mono); color: var(--accent); font-weight: 700;
+  }
+
+  /* ---------- comparison table ---------- */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  table.cmp { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 0.95rem; }
+  table.cmp thead th {
+    text-align: left; padding: 18px 20px; vertical-align: bottom;
+    border-bottom: 2px solid var(--line-strong);
+    font-weight: 700;
+  }
+  table.cmp thead th .pill {
+    font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em;
+    text-transform: uppercase; display: inline-block; padding: 3px 9px; border-radius: 999px; font-weight: 650;
+  }
+  table.cmp thead th.h-os { color: var(--os-deep); }
+  table.cmp thead th.h-os .pill { background: var(--os-soft); color: var(--os-deep); }
+  table.cmp thead th.h-ds { color: var(--ds-deep); }
+  table.cmp thead th.h-ds .pill { background: var(--ds-soft); color: var(--ds-deep); }
+  table.cmp thead th.h-aspect { color: var(--ink-2); font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  table.cmp tbody td { padding: 15px 20px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.45; }
+  table.cmp tbody tr:last-child td { border-bottom: none; }
+  table.cmp td.aspect { font-weight: 650; color: var(--ink); width: 22%; }
+  table.cmp td.os-col { color: var(--ink); width: 39%; }
+  table.cmp td.ds-col { color: var(--ink); width: 39%; }
+  table.cmp tbody tr:hover td { background: #f1f4ee; }
+  table.cmp td.os-col { box-shadow: inset 3px 0 0 var(--os-soft); }
+  table.cmp td.ds-col { box-shadow: inset 3px 0 0 var(--ds-soft); }
+
+  /* ---------- two shapes / diagrams ---------- */
+  .shapes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .shape {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--carbon);
+    padding: 24px 22px 26px; color: #e7ebe5; display: flex; flex-direction: column; gap: 18px;
+  }
+  .shape .cap { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .shape.is-ds .cap { color: #e0a458; }
+  .shape.is-os .cap { color: #46c7b8; }
+  .shape .diagram { display: flex; flex-direction: column; gap: 0; align-items: center; }
+  .node {
+    font-family: var(--font-mono); font-size: 0.82rem; text-align: center;
+    border: 1px solid #353d39; border-radius: 8px; padding: 12px 14px; background: #1c2320; width: 100%;
+    line-height: 1.4;
+  }
+  .node .t { font-weight: 600; color: #f2f5f0; }
+  .node .s { display: block; font-size: 0.72rem; color: #93a098; margin-top: 3px; }
+  .node.accent-ds { border-color: var(--ds); background: #2a2114; }
+  .node.accent-os { border-color: var(--os); background: #13211e; }
+  .conn { font-family: var(--font-mono); font-size: 0.68rem; color: #7d8a82; padding: 7px 0; letter-spacing: 0.04em; }
+  .fanout { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; }
+  .fanout .node { font-size: 0.7rem; padding: 9px 6px; }
+  .fanmore { font-family: var(--font-mono); font-size: 0.7rem; color: #7d8a82; text-align: center; margin-top: 6px; }
+  .shape .punch { font-size: 0.96rem; line-height: 1.45; color: #c8d0ca; margin-top: 2px; }
+  .shape .punch b { color: #fff; font-weight: 650; }
+
+  /* ---------- lens (AI agent) ---------- */
+  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .lens-card { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 0 12px 12px 0; background: var(--panel); padding: 24px 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+  .lens-card.is-ds { --accent: var(--ds); }
+  .lens-card.is-os { --accent: var(--os); }
+  .lens-card .role { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 650; }
+  .lens-card h3 { font-size: 1.12rem; }
+  .lens-card p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.55; }
+  .lens-card .scenario { font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink); background: #e9ede6; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; line-height: 1.4; }
+
+  /* ---------- decide ---------- */
+  .decide-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .decide-card { border-radius: 12px; padding: 24px 24px 26px; display: flex; flex-direction: column; gap: 14px; }
+  .decide-card.is-ds { background: var(--ds-tint); border: 1px solid var(--ds-soft); }
+  .decide-card.is-os { background: var(--os-tint); border: 1px solid var(--os-soft); }
+  .decide-card h3 { font-size: 1.05rem; display: flex; align-items: center; gap: 9px; }
+  .decide-card.is-ds h3 { color: var(--ds-deep); }
+  .decide-card.is-os h3 { color: var(--os-deep); }
+  .decide-card .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .decide-card.is-ds .dot { background: var(--ds); }
+  .decide-card.is-os .dot { background: var(--os); }
+  .decide-card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .decide-card li { position: relative; padding-left: 24px; font-size: 0.95rem; line-height: 1.45; color: var(--ink); }
+  .decide-card li::before { content: "✓"; position: absolute; left: 0; top: 0; font-family: var(--font-mono); font-weight: 700; }
+  .decide-card.is-ds li::before { color: var(--ds); }
+  .decide-card.is-os li::before { color: var(--os); }
+
+  /* ---------- combine ---------- */
+  .combine-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: clamp(26px, 4vw, 40px); display: grid; gap: 18px; }
+  .combine-box .analogy { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 6px; }
+  .combine-box .analogy > div { padding: 18px 20px; border-radius: 10px; }
+  .combine-box .analogy .ds { background: var(--ds-tint); }
+  .combine-box .analogy .os { background: var(--os-tint); }
+  .combine-box .analogy .h { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  .combine-box .analogy .ds .h { color: var(--ds-deep); }
+  .combine-box .analogy .os .h { color: var(--os-deep); }
+  .combine-box .analogy p { font-size: 0.96rem; line-height: 1.5; color: var(--ink); }
+
+  /* ---------- verified terminal ---------- */
+  .term { background: var(--carbon); border-radius: 12px; overflow: hidden; border: 1px solid #2a312e; }
+  .term .bar { display: flex; align-items: center; gap: 8px; padding: 13px 16px; background: #1c2320; border-bottom: 1px solid #2a312e; }
+  .term .bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .term .bar .r { background: #e06c5a; } .term .bar .y { background: #e0b04a; } .term .bar .g { background: #5ab877; }
+  .term .bar .title { font-family: var(--font-mono); font-size: 0.74rem; color: #8fa39a; margin-left: 8px; letter-spacing: 0.04em; }
+  .term pre { margin: 0; padding: 20px 18px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.75; color: #d4dbd3; }
+  .term .pmt { color: #46c7b8; }
+  .term .cmd { color: #f2f5f0; }
+  .term .out { color: #93a098; }
+  .term .ok { color: #7fd49a; }
+  .term .flag { color: #e0a458; }
+
+  .footnote { margin-top: 26px; font-size: 0.86rem; color: var(--ink-2); max-width: var(--prose); }
+  .footnote a { color: var(--os-deep); }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 60px; }
+  footer p { font-family: var(--font-mono); font-size: 0.74rem; color: var(--ink-2); letter-spacing: 0.04em; }
+
+  @media (max-width: 760px) {
+    .def-grid, .shapes, .lens-grid, .decide-grid, .verdict .split2, .combine-box .analogy { grid-template-columns: 1fr; }
+    body { font-size: 16px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+  }
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-mark">
+      <span class="os">OPENSANDBOX</span>
+      <span class="x">✕</span>
+      <span class="ds">DEV&nbsp;CONTAINERS</span>
+    </div>
+    <h1>Cùng dùng container.<br><span class="a">Giải</span> <span class="b">hai bài toán</span> khác nhau.</h1>
+    <div class="splitrule" aria-hidden="true"><i class="l"></i><i class="r"></i></div>
+    <p class="lede">Cả hai đều đặt code vào trong container để cô lập — nên dễ tưởng là thay thế được cho nhau. Nhưng chúng đứng ở <b>hai tầng khác nhau</b> và trả lời <b>hai câu hỏi khác nhau</b>. Trang này phân định rạch ròi, nhìn qua lăng kính bạn quan tâm: <b>chạy AI agent</b>.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="verdict reveal">
+      <span class="tag">Câu trả lời ngắn gọn</span>
+      <p class="big">Khác bài toán, <span class="tealw">trùng cơ chế</span>. Cùng là container, nhưng một cái là <span class="clayw">môi trường để bạn làm việc</span>, cái kia là <span class="tealw">nền tảng để ứng dụng vận hành workload</span>.</p>
+      <div class="split2">
+        <div class="ds">
+          <div class="lbl">Dev Container</div>
+          <p>Lo bài toán <b style="color:#e7ebe5">môi trường phát triển nhất quán</b> cho <b style="color:#e7ebe5">một người, một repo</b>. Diễn ra ở dev-time, do IDE điều khiển. Cô lập chỉ là lợi ích phụ.</p>
+        </div>
+        <div class="os">
+          <div class="lbl">OpenSandbox</div>
+          <p>Lo bài toán <b style="color:#e7ebe5">chạy workload cô lập theo chương trình, ở quy mô lớn</b> cho <b style="color:#e7ebe5">một ứng dụng/agent</b>. Diễn ra ở runtime, do API điều khiển. Cô lập an ninh là mục tiêu chính.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">01 — Mỗi cái là gì</span>
+      <h2>Định nghĩa lại cho rõ</h2>
+    </div>
+    <div class="def-grid">
+      <div class="def-card is-ds reveal">
+        <span class="kicker">Dev Container</span>
+        <h3>Một căn phòng làm việc dựng sẵn</h3>
+        <p class="one-liner">"Làm sao để tôi (và máy đồng đội) có cùng một bộ công cụ nhất quán?"</p>
+        <p>Sinh ra từ VS Code Remote Containers. Một file <code>devcontainer.json</code> mô tả base image, extensions, lệnh post-create, mount… để biến "chạy được trên máy tôi" thành "chạy được trong một container đã định nghĩa".</p>
+        <ul>
+          <li>Một container lâu dài, gắn với workspace/IDE của bạn</li>
+          <li>Repo của bạn được <b>mount thẳng</b> vào — container có toàn quyền với code</li>
+          <li>Thường forward SSH agent, git credential, đôi khi cả Docker socket</li>
+          <li>Mục tiêu: tái lập &amp; tiện lợi, không phải chống code độc hại</li>
+        </ul>
+      </div>
+      <div class="def-card is-os reveal">
+        <span class="kicker">OpenSandbox</span>
+        <h3>Một nhà máy dựng phòng theo yêu cầu</h3>
+        <p class="one-liner">"Làm sao ứng dụng của tôi tạo &amp; chạy hàng loạt môi trường cô lập, từ code, ở quy mô?"</p>
+        <p>Một control plane (server FastAPI) + data plane (container của bạn có daemon <code>execd</code> tiêm vào). Bạn gọi API để create → run lệnh/code/file → snapshot/pause → kill, với TTL tự hết hạn.</p>
+        <ul>
+          <li>N môi trường ephemeral, tạo/huỷ theo chương trình</li>
+          <li>Điều khiển qua REST API, SDK 5 ngôn ngữ, CLI <code>osb</code>, MCP</li>
+          <li>Egress policy, secure runtime (gVisor/Kata/Firecracker), Credential Vault</li>
+          <li>Chạy trên Docker (local) hoặc Kubernetes (BatchSandbox, Pool) ở quy mô</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">02 — Đặt cạnh nhau</span>
+      <h2>Khác nhau cụ thể ở đâu</h2>
+      <p class="prose" style="color:var(--ink-2)">Hàng quan trọng nhất là hàng đầu tiên: chúng trả lời hai câu hỏi khác nhau. Mọi khác biệt còn lại đều bắt nguồn từ đó.</p>
+    </div>
+    <div class="table-scroll reveal">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th class="h-aspect">Khía cạnh</th>
+            <th class="h-ds"><span class="pill">Dev Container</span></th>
+            <th class="h-os"><span class="pill">OpenSandbox</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="aspect">Câu hỏi cốt lõi</td><td class="ds-col">"Môi trường dev nhất quán bằng cách nào?"</td><td class="os-col">"App chạy workload cô lập theo chương trình, ở quy mô, bằng cách nào?"</td></tr>
+          <tr><td class="aspect">Ai điều khiển</td><td class="ds-col">Lập trình viên — qua IDE</td><td class="os-col">Ứng dụng / agent — qua API &amp; SDK</td></tr>
+          <tr><td class="aspect">Tầng vận hành</td><td class="ds-col">Build-time / dev-time</td><td class="os-col">Runtime (production)</td></tr>
+          <tr><td class="aspect">Số lượng môi trường</td><td class="ds-col">1, lâu dài, cho mỗi repo</td><td class="os-col">N, ephemeral, tạo/huỷ liên tục</td></tr>
+          <tr><td class="aspect">Mục tiêu cô lập</td><td class="ds-col">Tái lập + tiện lợi <em>(cô lập là phụ)</em></td><td class="os-col">An ninh: chạy code không tin cậy <em>(cô lập là chính)</em></td></tr>
+          <tr><td class="aspect">Giao diện</td><td class="ds-col"><code>devcontainer.json</code> + IDE</td><td class="os-col">REST API · SDK (Py/JS/Java/C#/Go) · CLI · MCP</td></tr>
+          <tr><td class="aspect">Source code</td><td class="ds-col">Repo của bạn được mount vào</td><td class="os-col">Tạo từ image; đẩy file vào qua API</td></tr>
+          <tr><td class="aspect">Kiểm soát mạng</td><td class="ds-col">Tự viết firewall script (tuỳ chọn)</td><td class="os-col">Egress policy engine + ingress gateway sẵn có</td></tr>
+          <tr><td class="aspect">Runtime nền</td><td class="ds-col">Docker (local)</td><td class="os-col">Docker <b>hoặc</b> Kubernetes</td></tr>
+          <tr><td class="aspect">Quản lý vòng đời</td><td class="ds-col">Thủ công / theo IDE</td><td class="os-col">TTL, pause/resume, snapshot, pool pre-warm</td></tr>
+          <tr><td class="aspect">Multi-tenant</td><td class="ds-col">Không — một người dùng</td><td class="os-col">Có — nhiều user/task, cô lập lẫn nhau</td></tr>
+          <tr><td class="aspect">Phù hợp nhất</td><td class="ds-col">Một agent giúp <b>bạn</b> code trên repo</td><td class="os-col">Một <b>sản phẩm</b> chạy agent/code cho nhiều người</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">03 — Hình dạng</span>
+      <h2>Hai kiến trúc, hai hình dạng</h2>
+      <p class="prose" style="color:var(--ink-2)">Cách nhanh nhất để cảm nhận khác biệt: vẽ ra. Một bên là một hộp bạn bước vào; bên kia là một control plane phun ra nhiều hộp.</p>
+    </div>
+    <div class="shapes">
+      <div class="shape is-ds reveal">
+        <span class="cap">Dev Container</span>
+        <div class="diagram">
+          <div class="node"><span class="t">Bạn + IDE</span><span class="s">VS Code / JetBrains</span></div>
+          <div class="conn">│ attach (lâu dài)</div>
+          <div class="node accent-ds"><span class="t">1 Container</span><span class="s">repo mounted · toolchain cố định · agent sống &amp; làm việc ở đây</span></div>
+        </div>
+        <p class="punch"><b>Một căn phòng. Bạn ở trong đó.</b> Dựng một lần, làm việc lâu dài, có trạng thái.</p>
+      </div>
+      <div class="shape is-os reveal">
+        <span class="cap">OpenSandbox</span>
+        <div class="diagram">
+          <div class="node"><span class="t">App / Agent</span><span class="s">SDK · CLI · MCP</span></div>
+          <div class="conn">│ REST API /v1</div>
+          <div class="node accent-os"><span class="t">Control Plane</span><span class="s">server: auth · validate · điều phối</span></div>
+          <div class="conn">│ tạo / huỷ theo yêu cầu</div>
+          <div class="fanout">
+            <div class="node accent-os"><span class="t">SBX</span></div>
+            <div class="node accent-os"><span class="t">SBX</span></div>
+            <div class="node accent-os"><span class="t">SBX</span></div>
+          </div>
+          <div class="fanmore">+ execd · egress · TTL · ephemeral …</div>
+        </div>
+        <p class="punch"><b>Một nhà máy. Dựng &amp; tháo phòng qua API.</b> Hàng loạt, cô lập lẫn nhau, tự hết hạn.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">04 — Lăng kính AI agent</span>
+      <h2>Cùng chữ "agent", hai ngữ cảnh</h2>
+      <p class="prose" style="color:var(--ink-2)">Đây là chỗ dễ nhầm nhất. Cùng nói "chạy AI agent trong container", nhưng vai trò của agent và của bạn hoàn toàn khác.</p>
+    </div>
+    <div class="lens-grid">
+      <div class="lens-card is-ds reveal">
+        <span class="role">Devcontainer cho agent</span>
+        <h3>Agent là đồng đội trên repo của bạn</h3>
+        <p>Bạn — một lập trình viên — muốn Claude Code / Cursor làm việc trong một căn phòng nhất quán &amp; an toàn ngay trên <b>code của bạn</b>. Một cái, lâu dài, lấy con người làm trung tâm. Agent sửa đúng codebase đó.</p>
+        <div class="scenario">"Cho trợ lý code của tôi một chỗ an toàn, đồng nhất để sửa repo này — đừng đụng vào host."</div>
+      </div>
+      <div class="lens-card is-os reveal">
+        <span class="role">OpenSandbox cho agent</span>
+        <h3>Agent là workload sản phẩm của bạn chạy</h3>
+        <p>Sản phẩm của bạn chạy code/agent mà bạn <b>không kiểm soát hoặc không tin tưởng</b>, có thể hàng nghìn lần, cô lập lẫn nhau và khỏi hạ tầng. Ephemeral, multi-tenant, ưu tiên an ninh.</p>
+        <div class="scenario">"SaaS của tôi cho phép người dùng chạy code AI sinh ra" · "Tôi vận hành một fleet RL training" · "Nền tảng agent của tôi spawn sub-agent."</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">05 — Chọn cái nào</span>
+      <h2>Dùng cái nào, khi nào</h2>
+    </div>
+    <div class="decide-grid">
+      <div class="decide-card is-ds reveal">
+        <h3><span class="dot"></span>Chọn Dev Container khi…</h3>
+        <ul>
+          <li>Bạn/team phát triển trên một (vài) repo cụ thể</li>
+          <li>Muốn toolchain tái lập, onboard nhanh "clone là code được"</li>
+          <li>Muốn trợ lý AI có chỗ làm việc đồng nhất, an toàn trên code của bạn</li>
+          <li>Không cần tạo môi trường bằng code, không cần scale</li>
+        </ul>
+      </div>
+      <div class="decide-card is-os reveal">
+        <h3><span class="dot"></span>Chọn OpenSandbox khi…</h3>
+        <ul>
+          <li>Bạn xây sản phẩm/nền tảng chạy code hoặc agent bằng chương trình</li>
+          <li>Cần multi-tenant và scale tới nhiều môi trường cô lập đồng thời</li>
+          <li>Cần kiểm soát egress mạng, cô lập mạnh cho code không tin cậy</li>
+          <li>Cần snapshot / pause-resume / pool / điều phối batch &amp; RL</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">06 — Không loại trừ nhau</span>
+      <h2>Và chúng kết hợp được</h2>
+    </div>
+    <div class="combine-box reveal">
+      <p class="prose" style="color:var(--ink)">Hai cái không đối nghịch. Bạn <b>chạy được một coding agent bên trong một OpenSandbox</b> — trong repo còn có sẵn ví dụ <code>examples/claude-code</code>. Hiểu theo cách này: OpenSandbox chính là <b>phiên bản công nghiệp, điều khiển bằng API, multi-tenant</b> của thứ mà devcontainer làm cho một người. Devcontainer là bản tĩnh, khai báo, một-instance; OpenSandbox là bản động, lập trình được, nhiều-instance.</p>
+      <div class="analogy">
+        <div class="ds">
+          <div class="h">Dev Container</div>
+          <p>Như một <b>xưởng cá nhân</b>: đồ nghề của bạn, bàn làm việc của bạn, set up một lần, bạn làm việc ở đó.</p>
+        </div>
+        <div class="os">
+          <div class="h">OpenSandbox</div>
+          <p>Như một <b>nhà máy dựng &amp; tháo xưởng theo yêu cầu</b> qua API — có bảo vệ, kiểm soát đường cấp (egress), chạy hàng trăm xưởng cùng lúc.</p>
+        </div>
+      </div>
+      <p class="prose" style="color:var(--ink-2); font-size:0.95rem">Một cách nhớ: <code>devcontainer : OpenSandbox</code> ≈ <code>docker run trên laptop của tôi : một nền tảng compute cô lập cho ứng dụng</code>. Devcontainer trả lời câu hỏi <b>dev-time</b> (tôi phát triển trong môi trường nào?); OpenSandbox trả lời câu hỏi <b>runtime</b> (ứng dụng của tôi thực thi workload động/không tin cậy ở đâu?).</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">07 — Đã chạy thật</span>
+      <h2>Kiểm chứng trên máy của bạn</h2>
+      <p class="prose" style="color:var(--ink-2)">Không phải lý thuyết — đây là output thật khi dựng OpenSandbox trên OrbStack (Docker 29.4.0) ngay trong phiên này.</p>
+    </div>
+    <div class="term reveal">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="title">orbstack · opensandbox · localhost:8080</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">uvx opensandbox-server</span>            <span class="out"># control plane lên ở 127.0.0.1:8080, Swagger ở /docs</span>
+
+<span class="pmt">$</span> <span class="cmd">osb sandbox create --image python:3.12 --timeout 30m</span>
+<span class="out">  → id: c8ffefe3-0ea0-4111-963c-b2369a100965   status: </span><span class="ok">running</span>
+
+<span class="pmt">$</span> <span class="cmd">docker ps</span>
+<span class="out">  sandbox-c8ffefe3...   python:3.12   Up   0.0.0.0:47713->8080, ...->44772  </span><span class="out"># container thật + execd</span>
+
+<span class="pmt">$</span> <span class="cmd">osb command run &lt;id&gt; -- python -c "import sys,platform; print(sys.version, platform.machine())"</span>
+<span class="out">  Python 3.12.13   aarch64</span>
+
+<span class="pmt">$</span> <span class="cmd">osb command run &lt;id&gt; -- python -c "import math; print(math.factorial(10))"</span>
+<span class="out">  3628800</span>
+
+<span class="pmt">$</span> <span class="cmd">osb command run &lt;id&gt; -- ls /Users</span>          <span class="out"># thử nhìn ra host macOS</span>
+<span class="out">  ls: cannot access '/Users': No such file or directory   </span><span class="flag">→ cô lập khỏi host ✓</span>
+
+<span class="pmt">$</span> <span class="cmd">osb sandbox kill &lt;id&gt;</span>
+<span class="out">  ○ terminated   </span><span class="out"># ephemeral: tạo &amp; huỷ theo chương trình</span></pre>
+    </div>
+    <p class="footnote">Lưu ý nhỏ ghi nhận được: image <code>opensandbox/execd</code> có trên Docker Hub nhưng đôi khi trả 401 tạm thời khi pull đồng thời — pull trước một lần là tạo sandbox chạy ngay. CLI dùng lệnh <code>osb sandbox kill</code> (không phải <code>delete</code>), và field id trong JSON là <code>id</code>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>OPENSANDBOX ✕ DEV CONTAINERS — so sánh cho việc chạy AI agent · dựng &amp; kiểm chứng cục bộ trên OrbStack</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>

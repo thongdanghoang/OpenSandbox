@@ -1,0 +1,459 @@
+<meta charset="utf-8">
+<title>OpenSandbox — Chốt hạ & Hướng dẫn Docker</title>
+<meta name="description" content="Bạn có thật sự cần OpenSandbox không? Bài toán nó giải, cổng quyết định 30 giây, và hướng dẫn chạy bằng Docker đã kiểm chứng.">
+<style>
+  :root {
+    --paper: #eef1ec;
+    --panel: #f9faf7;
+    --carbon: #14191a;
+    --ink: #181f1c;
+    --ink-2: #586259;
+    --line: #d5dbd1;
+    --line-strong: #c2cabd;
+
+    --os: #0e7d72;       /* OpenSandbox — đi tiếp */
+    --os-deep: #0a5f57;
+    --os-soft: #d9eae5;
+    --os-tint: #e8f2ee;
+
+    --stop: #a4661f;     /* dừng lại — bạn không cần */
+    --stop-deep: #7f4e15;
+    --stop-soft: #efe1c9;
+    --stop-tint: #f4ebda;
+
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+    --maxw: 1060px;
+    --prose: 700px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--font-sans); font-size: 17px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink-2); font-weight: 600;
+  }
+  h2 { font-size: clamp(1.45rem, 3vw, 2rem); line-height: 1.15; letter-spacing: -0.02em; font-weight: 750; text-wrap: balance; margin: 0; }
+  h3 { font-size: 1.08rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  .prose { max-width: var(--prose); }
+  .prose p + p { margin-top: 0.9em; }
+  strong { font-weight: 700; }
+  em { font-style: normal; color: var(--ink-2); }
+  code {
+    font-family: var(--font-mono); font-size: 0.86em; background: #e3e8e0;
+    padding: 0.1em 0.38em; border-radius: 4px; border: 1px solid var(--line);
+  }
+
+  /* ---------- hero ---------- */
+  .hero { padding: clamp(56px, 9vw, 100px) 0 clamp(36px, 5vw, 56px); }
+  .hero .kick { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .hero .kick .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--os); display: inline-block; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 6vw, 4.1rem); line-height: 1.03; letter-spacing: -0.035em;
+    font-weight: 800; margin: 0; text-wrap: balance;
+  }
+  .hero h1 .hl { color: var(--os); }
+  .hero .lede { font-size: clamp(1.05rem, 1.9vw, 1.28rem); color: var(--ink-2); max-width: 760px; line-height: 1.55; margin-top: 24px; }
+  .hero .lede b { color: var(--ink); font-weight: 650; }
+  .hero .stamp {
+    margin-top: 26px; font-family: var(--font-mono); font-size: 0.74rem; letter-spacing: 0.04em;
+    color: var(--os-deep); background: var(--os-tint); border: 1px solid var(--os-soft);
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px;
+  }
+
+  section { padding: clamp(40px, 6vw, 68px) 0; border-top: 1px solid var(--line); }
+  .sec-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; max-width: var(--prose); }
+
+  /* ---------- problem ---------- */
+  .essence {
+    background: var(--carbon); color: #e7ebe5; border-radius: 14px; padding: clamp(26px, 4vw, 40px);
+    display: grid; gap: 18px;
+  }
+  .essence .lbl { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8fa39a; }
+  .essence .big { font-size: clamp(1.3rem, 2.8vw, 1.85rem); line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; text-wrap: balance; }
+  .essence .big .hl { color: #46c7b8; }
+  .essence ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 11px; }
+  .essence li { position: relative; padding-left: 24px; color: #c4ccc6; font-size: 0.97rem; line-height: 1.5; }
+  .essence li::before { content: "▸"; position: absolute; left: 2px; color: #46c7b8; }
+  .essence li b { color: #fff; font-weight: 650; }
+
+  /* ---------- the gate ---------- */
+  .gate-intro { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-bottom: 24px; display: flex; gap: 16px; align-items: flex-start; }
+  .gate-intro .q { font-family: var(--font-mono); font-size: 1.5rem; color: var(--os); line-height: 1; flex-shrink: 0; }
+  .gate-intro p { font-size: 1.02rem; line-height: 1.5; }
+  .gate-intro b { font-weight: 700; }
+
+  .fork { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .lane { border-radius: 12px; padding: 26px 24px 28px; display: flex; flex-direction: column; gap: 16px; }
+  .lane.stop { background: var(--stop-tint); border: 1px solid var(--stop-soft); }
+  .lane.go { background: var(--os-tint); border: 1px solid var(--os-soft); }
+  .lane .head { display: flex; align-items: center; gap: 11px; }
+  .lane .badge { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; padding: 4px 10px; border-radius: 6px; }
+  .lane.stop .badge { background: var(--stop); color: #fff; }
+  .lane.go .badge { background: var(--os); color: #fff; }
+  .lane h3 { font-size: 1.12rem; }
+  .lane.stop h3 { color: var(--stop-deep); }
+  .lane.go h3 { color: var(--os-deep); }
+  .lane ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .lane li { position: relative; padding-left: 26px; font-size: 0.95rem; line-height: 1.45; color: var(--ink); }
+  .lane li::before { position: absolute; left: 0; top: 0; font-family: var(--font-mono); font-weight: 700; }
+  .lane.stop li::before { content: "✕"; color: var(--stop); }
+  .lane.go li::before { content: "→"; color: var(--os); }
+  .lane .foot { margin-top: 4px; font-size: 0.9rem; padding-top: 14px; border-top: 1px dashed; }
+  .lane.stop .foot { color: var(--stop-deep); border-color: var(--stop-soft); }
+  .lane.go .foot { color: var(--os-deep); border-color: var(--os-soft); }
+
+  .decider { margin-top: 24px; background: var(--carbon); color: #e7ebe5; border-radius: 12px; padding: 22px 26px; text-align: center; }
+  .decider .lbl { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8fa39a; display: block; margin-bottom: 10px; }
+  .decider p { font-size: clamp(1.05rem, 2.2vw, 1.35rem); font-weight: 650; line-height: 1.4; text-wrap: balance; }
+  .decider .you { color: #e0a458; }
+  .decider .code { color: #46c7b8; }
+
+  /* ---------- requisites ---------- */
+  .req-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .req {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .req .name { font-weight: 700; display: flex; align-items: baseline; gap: 9px; }
+  .req .tick { color: var(--os); font-family: var(--font-mono); font-weight: 700; }
+  .req .ver { font-family: var(--font-mono); font-size: 0.74rem; color: var(--os-deep); background: var(--os-tint); padding: 1px 7px; border-radius: 5px; }
+  .req p { font-size: 0.9rem; color: var(--ink-2); line-height: 1.45; }
+
+  /* ---------- runbook ---------- */
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 20px; padding: 24px 0; border-top: 1px solid var(--line); }
+  .step:first-of-type { border-top: none; }
+  .step .num { font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; color: #fff; background: var(--os); width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+  .step .body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .step h3 { font-size: 1.1rem; }
+  .step .desc { color: var(--ink-2); font-size: 0.95rem; line-height: 1.5; max-width: var(--prose); }
+
+  .term { background: var(--carbon); border-radius: 10px; overflow: hidden; border: 1px solid #2a312e; }
+  .term .bar { display: flex; align-items: center; gap: 7px; padding: 11px 15px; background: #1c2320; border-bottom: 1px solid #2a312e; }
+  .term .bar i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+  .term .bar .r { background: #e06c5a; } .term .bar .y { background: #e0b04a; } .term .bar .g { background: #5ab877; }
+  .term .bar .t { font-family: var(--font-mono); font-size: 0.72rem; color: #8fa39a; margin-left: 6px; letter-spacing: 0.04em; }
+  .term pre { margin: 0; padding: 16px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.81rem; line-height: 1.7; color: #d4dbd3; }
+  .term .pmt { color: #46c7b8; }
+  .term .cmd { color: #f2f5f0; }
+  .term .out { color: #93a098; }
+  .term .ok { color: #7fd49a; }
+  .term .flag { color: #e0a458; }
+
+  .note { font-size: 0.88rem; color: var(--ink-2); line-height: 1.5; padding-left: 14px; border-left: 3px solid var(--os-soft); max-width: var(--prose); }
+  .note b { color: var(--os-deep); }
+
+  /* ---------- gotchas ---------- */
+  .gotchas { display: grid; gap: 12px; }
+  .gotcha { background: var(--stop-tint); border: 1px solid var(--stop-soft); border-radius: 10px; padding: 16px 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; }
+  .gotcha .mark { font-family: var(--font-mono); font-weight: 700; color: var(--stop); }
+  .gotcha p { font-size: 0.93rem; line-height: 1.5; }
+  .gotcha b { color: var(--stop-deep); }
+  .gotcha code { background: #ece1cf; border-color: var(--stop-soft); }
+
+  /* ---------- next ---------- */
+  .next-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .nxt { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 7px; }
+  .nxt .h { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--os-deep); }
+  .nxt h3 { font-size: 1rem; }
+  .nxt p { font-size: 0.9rem; color: var(--ink-2); line-height: 1.45; }
+
+  footer { border-top: 1px solid var(--line); padding: 34px 0 60px; }
+  footer p { font-family: var(--font-mono); font-size: 0.74rem; color: var(--ink-2); letter-spacing: 0.04em; line-height: 1.7; }
+
+  @media (max-width: 760px) {
+    .fork, .req-grid, .next-grid { grid-template-columns: 1fr; }
+    .step { grid-template-columns: 1fr; gap: 14px; }
+    .step .num { width: 32px; height: 32px; }
+    body { font-size: 16px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+  }
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kick"><span class="dot"></span><span class="eyebrow">OpenSandbox · Chốt hạ &amp; Hướng dẫn Docker</span></div>
+    <h1>Bạn có thật sự cần <span class="hl">OpenSandbox</span> không?</h1>
+    <p class="lede">OpenSandbox là <b>hạ tầng để phần mềm của bạn tạo &amp; chạy môi trường cô lập theo chương trình, ở quy mô</b>. Sự thật thẳng thắn: phần lớn mọi người sẽ không cần nó. Trang này giúp bạn <b>tự loại mình ra trong 30 giây</b> — và nếu bạn thật sự cần, có sẵn hướng dẫn chạy bằng Docker đã kiểm chứng.</p>
+    <span class="stamp">✓ Đã dựng &amp; chạy thật trên macOS + OrbStack (Docker 29.4.0) trong phiên này</span>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">01 — Bài toán nó giải</span>
+      <h2>Nó tồn tại để làm gì</h2>
+    </div>
+    <div class="essence reveal">
+      <span class="lbl">Tinh thần cốt lõi</span>
+      <p class="big">Khi <span class="hl">phần mềm của bạn</span> — chứ không phải bạn ở IDE — cần dựng nhiều môi trường thực thi cô lập, theo yêu cầu, để chạy code/agent <span class="hl">không kiểm soát hoặc không tin tưởng</span>, rồi huỷ đi.</p>
+      <ul>
+        <li><b>Giao diện theo chương trình:</b> REST API · SDK (Python/JS/Java/C#/Go) · CLI <code>osb</code> · MCP — tạo → chạy lệnh/code/file → snapshot/pause → kill, có TTL tự hết hạn.</li>
+        <li><b>Cô lập an ninh là mục tiêu chính:</b> egress network policy, secure runtime (gVisor/Kata/Firecracker), Credential Vault, drop capabilities.</li>
+        <li><b>Quy mô:</b> chạy trên Docker (local/single-host) hoặc Kubernetes (BatchSandbox, Pool pre-warm) cho hàng loạt sandbox đồng thời.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">02 — Trước khi đọc tiếp</span>
+      <h2>Bạn có nằm trong số cần nó không?</h2>
+      <p class="prose" style="color:var(--ink-2)">Đọc một cột bên dưới và dừng lại đúng lúc. Nếu bạn rơi vào cột trái, đừng tốn thời gian với phần còn lại của trang — có công cụ phù hợp hơn cho bạn.</p>
+    </div>
+
+    <div class="gate-intro reveal">
+      <span class="q">?</span>
+      <p>Câu hỏi gốc để phân loại: <b>ai là người tạo ra môi trường — bạn (ngồi ở IDE) hay code của bạn (gọi qua API)?</b></p>
+    </div>
+
+    <div class="fork">
+      <div class="lane stop reveal">
+        <div class="head"><span class="badge">Dừng lại</span></div>
+        <h3>Bạn KHÔNG cần OpenSandbox</h3>
+        <ul>
+          <li>Bạn muốn cô lập môi trường dev cho từng project (Java version, Maven config riêng) để khỏi sửa PATH/ENV liên tục</li>
+          <li>Bạn muốn Claude Code / Codex làm việc an toàn, đồng nhất trên repo của bạn</li>
+          <li>Bạn chỉ chạy code của chính mình, trên một máy, một project một lúc</li>
+          <li>Bạn không tạo môi trường "bằng code" và không cần scale hay multi-tenant</li>
+        </ul>
+        <p class="foot">→ Dùng <b>Dev Container</b> (hoặc venv/SDKMAN/<code>docker run</code>). Đây là lựa chọn đúng cho nhu cầu của bạn. Đóng tab này được rồi.</p>
+      </div>
+      <div class="lane go reveal">
+        <div class="head"><span class="badge">Đọc tiếp</span></div>
+        <h3>Bạn CÓ THỂ cần OpenSandbox</h3>
+        <ul>
+          <li>Bạn xây sản phẩm chạy code do <b>người dùng hoặc model</b> sinh ra (online judge, tính năng "Run", AI code-execution)</li>
+          <li>Bạn chạy/eval agent trên nhiều repo <b>tự động, song song</b> (kiểu SWE-bench) — mỗi cái một sandbox sạch rồi tear down</li>
+          <li>Bạn cần <b>multi-tenant</b>: cô lập code của nhiều người khỏi nhau và khỏi hạ tầng</li>
+          <li>Bạn cần egress control / pause-resume / snapshot / pool / scale trên Kubernetes</li>
+        </ul>
+        <p class="foot">→ Tiếp tục xuống phần Yêu cầu &amp; Hướng dẫn Docker bên dưới.</p>
+      </div>
+    </div>
+
+    <div class="decider reveal">
+      <span class="lbl">Quy tắc một dòng</span>
+      <p>Môi trường do <span class="you">BẠN tạo qua IDE</span> → devcontainer. Do <span class="code">CODE của bạn tạo qua API</span>, hàng loạt, ephemeral → OpenSandbox.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">03 — Yêu cầu môi trường</span>
+      <h2>Cần gì trên máy</h2>
+      <p class="prose" style="color:var(--ink-2)">Tối thiểu để chạy bản local với runtime Docker. Đây là cấu hình đã kiểm chứng trong phiên này.</p>
+    </div>
+    <div class="req-grid">
+      <div class="req reveal">
+        <span class="name"><span class="tick">✓</span> Docker Engine <span class="ver">20.10+</span></span>
+        <p>Bắt buộc cho chạy local. OrbStack hoạt động tốt — đã test trên <code>Server 29.4.0</code>. Docker Desktop cũng được.</p>
+      </div>
+      <div class="req reveal">
+        <span class="name"><span class="tick">✓</span> Python <span class="ver">3.10+</span></span>
+        <p>Nếu máy thấp hơn (vd macOS mặc định <code>3.9.6</code>) thì không cần lo — <code>uv</code> sẽ tự tải Python 3.10 khi chạy.</p>
+      </div>
+      <div class="req reveal">
+        <span class="name"><span class="tick">✓</span> uv <span class="ver">khuyến nghị</span></span>
+        <p>Quản package &amp; Python tự động. Cài: <code>brew install uv</code>. Đã dùng <code>uv 0.11.25</code>. Cho phép chạy <code>uvx</code> không cần cài sẵn.</p>
+      </div>
+      <div class="req reveal">
+        <span class="name"><span class="tick">✓</span> OS &amp; dung lượng</span>
+        <p>macOS / Linux / Windows + WSL2. Cần vài trăm MB cho image <code>python:3.12</code> và <code>opensandbox/execd</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">04 — Hướng dẫn Docker</span>
+      <h2>Chạy thử bằng Docker, từng bước</h2>
+      <p class="prose" style="color:var(--ink-2)">Đúng trình tự đã chạy thành công trên máy macOS + OrbStack. Copy chạy lần lượt là lên.</p>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">1</div>
+      <div class="body">
+        <h3>Cài uv &amp; bật Docker</h3>
+        <p class="desc">uv lo luôn việc tải Python 3.10 nếu máy bạn đang thấp hơn. Mở OrbStack (hoặc Docker Desktop) cho daemon chạy.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">setup</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">brew install uv</span>
+<span class="pmt">$</span> <span class="cmd">open -a OrbStack</span>          <span class="out"># hoặc mở Docker Desktop</span>
+<span class="pmt">$</span> <span class="cmd">docker info &gt; /dev/null &amp;&amp; echo "Docker OK"</span>
+<span class="out">  Docker OK</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">2</div>
+      <div class="body">
+        <h3>Khởi tạo config server (runtime Docker)</h3>
+        <p class="desc">Sinh file <code>~/.sandbox.toml</code> theo mẫu docker. Lần đầu, uv sẽ tải Python 3.10 + dependencies.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">init-config</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">uvx opensandbox-server init-config ~/.sandbox.toml --example docker</span>
+<span class="out">  Downloaded cpython-3.10 · Installed 48 packages</span>
+<span class="out">  Wrote example config (docker) to ~/.sandbox.toml</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">3</div>
+      <div class="body">
+        <h3>Chạy server (chế độ local không key)</h3>
+        <p class="desc">Config mẫu để trống <code>api_key</code>, nên cần xác nhận chạy chế độ insecure. Chỉ dùng ở local — đừng expose ra ngoài. Chạy ở một terminal riêng (nó chiếm tiền cảnh).</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">server · :8080</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">OPENSANDBOX_INSECURE_SERVER=YES uvx opensandbox-server</span>
+<span class="out">  Uvicorn running on http://127.0.0.1:8080</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">4</div>
+      <div class="body">
+        <h3>Kiểm tra server sống</h3>
+        <p class="desc">Mở terminal khác. Swagger UI ở <code>/docs</code>; danh sách sandbox ban đầu rỗng.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">healthcheck</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/docs</span>
+<span class="ok">  200</span>
+<span class="pmt">$</span> <span class="cmd">curl -s http://127.0.0.1:8080/v1/sandboxes</span>
+<span class="out">  {"items":[],"pagination":{"totalItems":0, ...}}</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">5</div>
+      <div class="body">
+        <h3>Cài &amp; cấu hình CLI <code>osb</code></h3>
+        <p class="desc">Trỏ CLI về server local qua HTTP. Sau bước này lệnh <code>osb</code> có sẵn trên PATH.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">cli config</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">uv tool install opensandbox-cli</span>     <span class="out"># hoặc: uvx --from opensandbox-cli osb &lt;cmd&gt;</span>
+<span class="pmt">$</span> <span class="cmd">osb config init</span>
+<span class="pmt">$</span> <span class="cmd">osb config set connection.domain localhost:8080</span>
+<span class="pmt">$</span> <span class="cmd">osb config set connection.protocol http</span>
+<span class="ok">  ✅ config saved</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">6</div>
+      <div class="body">
+        <h3>Pull sẵn image (khuyến nghị)</h3>
+        <p class="desc">Tránh lỗi 401 tạm thời khi server pull <code>execd</code> đồng thời với image của bạn. Pull tay một lần là xong.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">pre-pull</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">docker pull opensandbox/execd:v1.0.19</span>
+<span class="pmt">$</span> <span class="cmd">docker pull python:3.12</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">7</div>
+      <div class="body">
+        <h3>Tạo một sandbox</h3>
+        <p class="desc">Tạo từ image <code>python:3.12</code>, TTL 30 phút. Để ý: id nằm ở field <code>id</code> trong JSON.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">create</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">osb sandbox create --image python:3.12 --timeout 30m -o json</span>
+<span class="out">  {
+    "id": "c8ffefe3-0ea0-4111-963c-b2369a100965",
+    "image": "python:3.12",
+    "status": </span><span class="ok">"running"</span><span class="out">
+  }</span>
+<span class="pmt">$</span> <span class="cmd">docker ps</span>     <span class="out"># container thật + execd map cổng riêng</span>
+<span class="out">  sandbox-c8ffefe3...  python:3.12  Up  0.0.0.0:47713-&gt;8080 ...</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">8</div>
+      <div class="body">
+        <h3>Chạy lệnh / code bên trong</h3>
+        <p class="desc">Thực thi trong sandbox và xác nhận nó cô lập khỏi host (không thấy <code>/Users</code> của macOS).</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">run</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">osb command run &lt;id&gt; -o raw -- python -c "import sys; print(sys.version)"</span>
+<span class="out">  3.12.13 ...</span>
+<span class="pmt">$</span> <span class="cmd">osb command run &lt;id&gt; -o raw -- ls /Users</span>
+<span class="out">  ls: cannot access '/Users': No such file or directory  </span><span class="flag">→ cô lập ✓</span></pre></div>
+      </div>
+    </div>
+
+    <div class="step reveal">
+      <div class="num">9</div>
+      <div class="body">
+        <h3>Dọn dẹp</h3>
+        <p class="desc">Huỷ sandbox bằng <code>kill</code> (không có lệnh <code>delete</code>). Server thì dừng bằng Ctrl+C ở terminal đang chạy nó.</p>
+        <div class="term"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="t">cleanup</span></div>
+<pre><span class="pmt">$</span> <span class="cmd">osb sandbox kill &lt;id&gt;</span>
+<span class="out">  ○ terminated</span>
+<span class="pmt">$</span> <span class="cmd"># dừng server: Ctrl+C ở terminal chạy opensandbox-server</span></pre></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">05 — Ổ gà thực tế</span>
+      <h2>Những điểm dễ vấp (đã gặp)</h2>
+      <p class="prose" style="color:var(--ink-2)">Đây là các trục trặc gặp thật khi chạy trên máy macOS + OrbStack, và cách xử lý.</p>
+    </div>
+    <div class="gotchas">
+      <div class="gotcha reveal"><span class="mark">PY</span><p><b>Python 3.9 không đủ.</b> macOS mặc định <code>3.9.6</code> &lt; mức yêu cầu 3.10+. Không cần cài Python tay — <code>uv</code> tự tải bản 3.10 ngay ở bước <code>init-config</code>.</p></div>
+      <div class="gotcha reveal"><span class="mark">401</span><p><b>Pull <code>execd</code> báo 401 lúc tạo sandbox lần đầu.</b> Đây là lỗi <em>tạm thời</em> của Docker Hub khi pull đồng thời, không phải image private. Chạy <code>docker pull opensandbox/execd:v1.0.19</code> một lần trước (bước 6) là hết.</p></div>
+      <div class="gotcha reveal"><span class="mark">KEY</span><p><b>Server không chịu chạy nếu thiếu key.</b> Config mẫu để trống <code>api_key</code>, nên phải đặt <code>OPENSANDBOX_INSECURE_SERVER=YES</code>. Chỉ dùng ở local; production thì đặt <code>api_key</code> thật.</p></div>
+      <div class="gotcha reveal"><span class="mark">JSON</span><p><b>Tên field là <code>id</code>, không phải <code>sandboxId</code>.</b> Parse output <code>-o json</code> nhớ lấy <code>.id</code> — nếu không sẽ tưởng tạo thất bại trong khi sandbox đã chạy.</p></div>
+      <div class="gotcha reveal"><span class="mark">CLI</span><p><b>Huỷ sandbox là <code>osb sandbox kill &lt;id&gt;</code>.</b> Không có lệnh <code>delete</code>. Các lệnh khác: <code>create · list · get · kill · pause · resume · renew · metrics · endpoint · health</code>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">06 — Đi tiếp</span>
+      <h2>Sau khi chạy được</h2>
+    </div>
+    <div class="next-grid">
+      <div class="nxt reveal"><span class="h">Code execution</span><h3>Code Interpreter</h3><p>Chạy Python có trạng thái qua Jupyter trong sandbox. Image <code>opensandbox/code-interpreter</code> + SDK <code>opensandbox-code-interpreter</code>.</p></div>
+      <div class="nxt reveal"><span class="h">Network</span><h3>Egress policy</h3><p>Tạo sandbox với <code>networkPolicy</code> để chặn/allow domain — đúng giá trị cốt lõi: cô lập code không tin cậy.</p></div>
+      <div class="nxt reveal"><span class="h">Agent</span><h3>examples/claude-code</h3><p>Chạy một coding agent <em>bên trong</em> sandbox — đúng kịch bản "agent trong hộp cát" ở quy mô.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>OPENSANDBOX — CHỐT HẠ &amp; HƯỚNG DẪN DOCKER<br>Dựng &amp; kiểm chứng cục bộ trên macOS + OrbStack · runtime Docker · localhost:8080</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>
